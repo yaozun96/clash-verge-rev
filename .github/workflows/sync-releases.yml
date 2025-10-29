@@ -1,0 +1,23 @@
+name: Sync Upstream Releases
+
+on:
+  workflow_dispatch:      # 手动触发
+  schedule:
+    - cron: '0 3 * * *'   # 每天凌晨 3 点自动运行
+
+permissions:
+  contents: write
+
+jobs:
+  sync_releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync Releases
+        uses: aminya/sync-releases@v1
+        with:
+          source: "clash-verge-rev/clash-verge-rev"
+          destination: "yaozun96/clash-verge-rev"
+          token: ${{ secrets.GITHUB_TOKEN }}
