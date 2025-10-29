@@ -53,6 +53,9 @@
 **发布时间：2025 年 10 月 29 日**  
 同步自上游官方仓库。
 
+📁 **更多版本请前往：**  
+👉 [GitHub Releases 页面查看全部版本](https://github.com/yaozun96/clash-verge-rev/releases)
+
 | 文件名 | 适用系统 | 下载地址 |
 |--------|-----------|-----------|
 | Clash.Verge_2.4.2_x64-setup.exe | Windows 64 位 | [点击下载](https://github.com/yaozun96/clash-verge-rev/releases/download/v2.4.2/Clash.Verge_2.4.2_x64-setup.exe) |
@@ -69,7 +72,6 @@
 > ✅ 所有文件均为上游原版同步，哈希值与官方一致。  
 
 ---
-
 
 ## ✈️ 优质机场推荐
 
