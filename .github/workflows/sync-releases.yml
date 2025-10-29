@@ -1,76 +1,61 @@
-name: Sync Upstream Releases (from clash-verge-rev)
+name: Sync Latest Upstream Release
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'  # 每天 03:00 UTC 自动执行
+    - cron: '0 */6 * * *'  # 每6小时自动检测一次
 
 permissions:
   contents: write
 
 jobs:
-  sync_releases:
+  sync_latest_release:
     runs-on: ubuntu-latest
-
     steps:
       - name: 安装依赖
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq gh curl
 
-      - name: 同步上游 Releases
+      - name: 同步最新上游 Release
         env:
           SRC_REPO: clash-verge-rev/clash-verge-rev
           DST_REPO: yaozun96/clash-verge-rev
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 开始同步上游 Releases..."
+          echo "🚀 检查上游最新 Release..."
+          latest_tag=$(gh release list -R "$SRC_REPO" --limit 1 | tail -n +2 | awk '{print $3}')
 
-          # 拉取上游 release 列表
-          gh release list -R "$SRC_REPO" --limit 100 > upstream_releases.txt
-          tail -n +2 upstream_releases.txt > releases_clean.txt
+          if [[ -z "$latest_tag" ]]; then
+            echo "❌ 未找到上游 release"
+            exit 0
+          fi
 
-          while read -r line; do
-            tag=$(echo "$line" | awk '{print $1}')
-            if [[ -z "$tag" ]]; then
-              continue
-            fi
+          echo "🔍 上游最新版本: $latest_tag"
 
-            echo "⚙️ 处理 Release: $tag"
+          if gh release view "$latest_tag" -R "$DST_REPO" &>/dev/null; then
+            echo "✅ 本地已存在，无需同步。"
+            exit 0
+          fi
 
-            if gh release view "$tag" -R "$DST_REPO" &>/dev/null; then
-              echo "✅ $tag 已存在，跳过"
-              continue
-            fi
+          echo "📦 获取上游 release 信息..."
+          gh release view "$latest_tag" -R "$SRC_REPO" --json name,body,assets > release.json
 
-            echo "📦 获取上游 Release 信息..."
-            if ! gh release view "$tag" -R "$SRC_REPO" --json name,body,assets > release.json; then
-              echo "⚠️ 无法获取 release $tag，跳过"
-              continue
-            fi
+          name=$(jq -r '.name' release.json)
+          body=$(jq -r '.body' release.json)
 
-            name=$(jq -r '.name' release.json)
-            body=$(jq -r '.body' release.json)
+          echo "🧩 创建 release: $latest_tag"
+          gh release create "$latest_tag" -R "$DST_REPO" -t "$name" -n "$body" || true
 
-            echo "🧩 创建 Release: $tag"
-            gh release create "$tag" -R "$DST_REPO" -t "$name" -n "$body" || true
+          assets=$(jq -r '.assets[].url' release.json)
+          if [[ -z "$assets" ]]; then
+            echo "⚠️ 无附件，跳过上传"
+            exit 0
+          fi
 
-            assets=$(jq -r '.assets[].url' release.json)
-            if [[ -z "$assets" ]]; then
-              echo "⚠️ 没有附件，跳过上传"
-              continue
-            fi
-
-            echo "⬇️ 开始下载并上传附件..."
-            for asset_url in $assets; do
-              filename=$(basename "$asset_url")
-              echo "📥 下载 $filename"
-              curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
-              echo "📤 上传 $filename"
-              gh release upload "$tag" "$filename" -R "$DST_REPO" --clobber || true
-            done
-
-            echo "✅ 完成同步 $tag"
-          done < releases_clean.txt
-
-          echo "🎉 所有 releases 已处理完毕。"
+          echo "⬇️ 下载并上传附件..."
+          for asset_url in $assets; do
+            filename=$(basename "$asset_url")
+            echo "📥 下载 $filename"
+            curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
+            echo "📤 上传 $filename"
