@@ -17,13 +17,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq gh curl
 
-      - name: 使用 GITHUB_TOKEN 登录 GitHub CLI
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "${GITHUB_TOKEN}" | gh auth login --with-token --hostname github.com
-          gh auth status
-
       - name: 同步上游 Releases
         env:
           SRC_REPO: clash-verge-rev/clash-verge-rev
