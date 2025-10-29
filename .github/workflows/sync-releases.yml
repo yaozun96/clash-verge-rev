@@ -1,9 +1,7 @@
-name: Sync Upstream Releases (from clash-verge-rev)
+name: Sync Upstream Releases (debug mode)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'  # 每天 03:00 UTC 自动执行
 
 permissions:
   contents: write
@@ -12,50 +10,35 @@ jobs:
   sync_releases:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装 GitHub CLI 和依赖
+      - name: 启用调试输出
+        run: |
+          set -x
+          echo "启动调试模式"
+
+      - name: 安装依赖
         run: |
           sudo apt-get update
           sudo apt-get install -y jq gh curl
 
-      - name: 使用 GITHUB_TOKEN 登录 GitHub CLI
+      - name: 登录 GitHub CLI（调试）
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${GITHUB_TOKEN}" | gh auth login --with-token --hostname github.com
-          gh auth status
+          echo "使用 GITHUB_TOKEN 登录..."
+          echo "${GITHUB_TOKEN}" | gh auth login --with-token --hostname github.com || echo "❌ 登录失败"
+          gh auth status || echo "⚠️ 无法验证登录状态"
 
-      - name: 同步上游 Releases
+      - name: 测试 gh 命令是否可用
+        run: |
+          gh --version
+          gh repo view clash-verge-rev/clash-verge-rev || echo "⚠️ 无法访问上游仓库"
+
+      - name: 尝试列出上游 releases（测试）
         env:
-          SRC_REPO: clash-verge-rev/clash-verge-rev
-          DST_REPO: yaozun96/clash-verge-rev
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          echo "🚀 获取上游 Releases 列表..."
-          gh release list -R "$SRC_REPO" --limit 5 || (echo "❌ 获取上游 Releases 失败"; exit 1)
+          echo "🧩 尝试列出上游 releases..."
+          gh release list -R clash-verge-rev/clash-verge-rev --limit 5 || echo "❌ 获取失败"
 
-          for tag in $(gh release list -R "$SRC_REPO" --limit 100 | awk '{print $1}'); do
-            echo "⚙️ 处理 Release: $tag"
-            if gh release view "$tag" -R "$DST_REPO" &>/dev/null; then
-              echo "✅ $tag 已存在，跳过"
-              continue
-            fi
-
-            echo "📦 下载上游 Release 信息..."
-            gh release view "$tag" -R "$SRC_REPO" --json name,body,assets > release.json
-
-            name=$(jq -r '.name' release.json)
-            body=$(jq -r '.body' release.json)
-
-            echo "🧩 创建 Release: $tag"
-            gh release create "$tag" -R "$DST_REPO" -t "$name" -n "$body" || true
-
-            echo "⬇️ 同步附件..."
-            for asset_url in $(jq -r '.assets[].url' release.json); do
-              filename=$(basename "$asset_url")
-              curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
-              gh release upload "$tag" "$filename" -R "$DST_REPO" --clobber || true
-            done
-
-            echo "✅ 完成 $tag"
-          done
+      - name: 输出结论
+        run: echo "✅ 调试步骤执行完毕。查看上方输出信息确定哪一步失败。"
