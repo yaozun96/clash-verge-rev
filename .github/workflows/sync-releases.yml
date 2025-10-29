@@ -1,4 +1,4 @@
-name: Sync Upstream Releases
+name: Sync Upstream Releases (from clash-verge-rev)
 
 on:
   workflow_dispatch:
@@ -12,12 +12,34 @@ jobs:
   sync_releases:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Install GitHub CLI
+        run: sudo apt-get update && sudo apt-get install -y jq gh
+
+      - name: Authenticate GitHub CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth setup-git
 
       - name: Sync Releases
-        uses: aminya/sync-releases@v1
-        with:
-          source: "clash-verge-rev/clash-verge-rev@dev"
-          destination: "yaozun96/clash-verge-rev"
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          SRC_REPO: clash-verge-rev/clash-verge-rev
+          DST_REPO: yaozun96/clash-verge-rev
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching upstream releases from $SRC_REPO..."
+          for tag in $(gh release list -R $SRC_REPO --limit 100 | awk '{print $1}'); do
+            echo "Processing release: $tag"
+            if gh release view $tag -R $DST_REPO &>/dev/null; then
+              echo "✅ Release $tag already exists, skipping."
+              continue
+            fi
+            gh release view $tag -R $SRC_REPO --json name,body,tagName,assets > release.json
+            name=$(jq -r '.name' release.json)
+            body=$(jq -r '.body' release.json)
+            gh release create $tag -R $DST_REPO -t "$name" -n "$body" || true
+            for asset_url in $(jq -r '.assets[].url' release.json); do
+              filename=$(basename "$asset_url")
+              curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
+              gh release upload $tag "$filename" -R $DST_REPO --clobber || true
+            done
+          done
