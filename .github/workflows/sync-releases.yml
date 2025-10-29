@@ -18,6 +18,6 @@ jobs:
       - name: Sync Releases
         uses: aminya/sync-releases@v1
         with:
-          source: "clash-verge-rev/clash-verge-rev@master"
+          source: "clash-verge-rev/clash-verge-rev@dev"
           destination: "yaozun96/clash-verge-rev"
           token: ${{ secrets.GITHUB_TOKEN }}
