@@ -3,7 +3,7 @@ name: Sync Latest Upstream Release
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'  # 每天UTC 00:00执行一次（即北京时间早上8点）
+    - cron: '0 0 * * *'  # 每天UTC 0点执行（北京时间8点）
 
 permissions:
   contents: write
@@ -26,14 +26,14 @@ jobs:
         run: |
           echo "🚀 开始同步上游最新正式版本..."
 
-          # 获取上游最新正式版本（排除 Pre-release）
-          latest_line=$(gh release list -R "$SRC_REPO" --limit 5 | grep -v "Pre-release" | grep -vE '^TITLE' | head -n 1)
-          if [[ -z "$latest_line" ]]; then
+          # 获取上游最新正式版本的 tag（忽略 Pre-release）
+          tag=$(gh release list -R "$SRC_REPO" --limit 5 | grep -v "Pre-release" | grep -vE '^TITLE' | awk '{print $NF}' | head -n 1 | tr -d '\r' | xargs)
+
+          if [[ -z "$tag" ]]; then
             echo "❌ 未找到正式版本，任务结束。"
             exit 0
           fi
 
-          tag=$(echo "$latest_line" | awk '{print $3}' | tr -d '\r' | xargs)
           echo "🧩 检测到最新版本 TAG: [$tag]"
 
           # 检查目标仓库是否已有该版本
@@ -55,18 +55,4 @@ jobs:
           gh release create "$tag" -R "$DST_REPO" -t "$name" -n "$body" || true
 
           assets=$(jq -r '.assets[].url' release.json)
-          if [[ -z "$assets" ]]; then
-            echo "⚠️ 该版本无附件，跳过上传。"
-            exit 0
-          fi
-
-          echo "⬇️ 下载并上传附件..."
-          for asset_url in $assets; do
-            filename=$(basename "$asset_url")
-            echo "📥 下载 $filename"
-            curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
-            echo "📤 上传 $filename"
-            gh release upload "$tag" "$filename" -R "$DST_REPO" --clobber || true
-          done
-
-          echo "✅ 成功同步最新版本: $tag"
+          if
