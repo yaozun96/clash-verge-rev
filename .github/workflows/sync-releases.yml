@@ -26,6 +26,9 @@ jobs:
           echo "🚀 开始同步上游 Releases..."
           gh release list -R "$SRC_REPO" --limit 100 > upstream_releases.txt
 
+          # 跳过表头行
+          tail -n +2 upstream_releases.txt > releases_clean.txt
+
           while read -r line; do
             tag=$(echo "$line" | awk '{print $1}')
             if [[ -z "$tag" ]]; then
@@ -33,35 +36,21 @@ jobs:
             fi
             echo "⚙️ 处理 Release: $tag"
 
+            # 检查目标仓库中是否已存在
             if gh release view "$tag" -R "$DST_REPO" &>/dev/null; then
               echo "✅ $tag 已存在，跳过"
               continue
             fi
 
+            # 获取上游 release 信息
             echo "📦 获取上游 Release 信息..."
-            gh release view "$tag" -R "$SRC_REPO" --json name,body,assets > release.json
+            gh release view "$tag" -R "$SRC_REPO" --json name,body,assets > release.json || {
+              echo "⚠️ 无法获取 release $tag，跳过"
+              continue
+            }
             name=$(jq -r '.name' release.json)
             body=$(jq -r '.body' release.json)
 
+            # 创建新 release
             echo "🧩 创建 Release: $tag"
-            gh release create "$tag" -R "$DST_REPO" -t "$name" -n "$body" || true
-
-            assets=$(jq -r '.assets[].url' release.json)
-            if [[ -z "$assets" ]]; then
-              echo "⚠️ 没有附件，跳过上传"
-              continue
-            fi
-
-            echo "⬇️ 开始下载并上传附件..."
-            for asset_url in $assets; do
-              filename=$(basename "$asset_url")
-              echo "📥 下载 $filename"
-              curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
-              echo "📤 上传 $filename"
-              gh release upload "$tag" "$filename" -R "$DST_REPO" --clobber || true
-            done
-
-            echo "✅ 完成同步 $tag"
-          done < upstream_releases.txt
-
-          echo "🎉 所有 releases 已处理完毕。"
+            gh release create "$tag" -R "$DST_REPO"_
