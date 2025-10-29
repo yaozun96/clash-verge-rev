@@ -26,8 +26,8 @@ jobs:
         run: |
           echo "🚀 开始同步上游最新正式版本..."
 
-          # 获取上游最新正式版本的 tag（忽略 Pre-release）
-          tag=$(gh release list -R "$SRC_REPO" --limit 5 | grep -v "Pre-release" | grep -vE '^TITLE' | awk '{print $NF}' | head -n 1 | tr -d '\r' | xargs)
+          # 获取上游最新正式版本 tag（非 pre-release）
+          tag=$(gh release list -R "$SRC_REPO" --limit 5 | grep -v "Pre-release" | grep -vE '^TITLE' | awk '{print $(NF-1)}' | head -n 1 | tr -d '\r' | xargs)
 
           if [[ -z "$tag" ]]; then
             echo "❌ 未找到正式版本，任务结束。"
@@ -55,4 +55,18 @@ jobs:
           gh release create "$tag" -R "$DST_REPO" -t "$name" -n "$body" || true
 
           assets=$(jq -r '.assets[].url' release.json)
-          if
+          if [[ -z "$assets" ]]; then
+            echo "⚠️ 该版本无附件，跳过上传。"
+            exit 0
+          fi
+
+          echo "⬇️ 下载并上传附件..."
+          for asset_url in $assets; do
+            filename=$(basename "$asset_url")
+            echo "📥 下载 $filename"
+            curl -L -o "$filename" -H "Authorization: token $GITHUB_TOKEN" "$asset_url"
+            echo "📤 上传 $filename"
+            gh release upload "$tag" "$filename" -R "$DST_REPO" --clobber || true
+          done
+
+          echo "✅ 成功同步最新版本: $tag"
